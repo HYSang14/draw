@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Document</title>
+  <script src="jquery-3.4.1.min.js"></script>
+  <script src="highcharts.js"></script>
+  <script src="highcharts/code/modules/exporting.js"></script>
+  <script src="highcharts/code/modules/data.js"></script>
+  <script src="highcharts/code/modules/drilldown.js"></script>
+  <style>
+    .tr>th {
+      padding-right: 200px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="container" style="min-width: 310px; max-width: 600px; height: 400px; margin: 0 auto"></div>
+  <div style="min-width: 310px; max-width: 600px; height: 400px; margin: 0px auto; overflow: hidden">
+    <table id="tab" style='border:1px solid #000'>
+      <thead>
+          <tr class="tr">
+              <th>品牌</th>
+              <th>百分比</th>
+            </tr>
+      </thead>
+      <tbody class='tab'>
+
+      </tbody>
+    </table>
+  </div>
+  <pre id="tsv" style="display:none">Browser Version	Total Market Share
+        Microsoft Internet Explorer 8.0	26.61%
+        Microsoft Internet Explorer 9.0	16.96%
+        Chrome 18.0	8.01%
+        Chrome 19.0	7.73%
+        Firefox 12	6.72%
+        Microsoft Internet Explorer 6.0	6.40%
+        Firefox 11	4.72%
+        Microsoft Internet Explorer 7.0	3.55%
+        Safari 5.1	3.53%
+        Firefox 13	2.16%
+        Firefox 3.6	1.87%
+        Opera 11.x	1.30%
+        Chrome 17.0	1.13%
+        Firefox 10	0.90%
+        Safari 5.0	0.85%
+        Firefox 9.0	0.65%
+        Firefox 8.0	0.55%
+        Firefox 4.0	0.50%
+        Chrome 16.0	0.45%
+        Firefox 3.0	0.36%
+        Firefox 3.5	0.36%
+        Firefox 6.0	0.32%
+        Firefox 5.0	0.31%
+        Firefox 7.0	0.29%
+        Proprietary or Undetectable	0.29%
+        Chrome 18.0 - Maxthon Edition	0.26%
+        Chrome 14.0	0.25%
+        Chrome 20.0	0.24%
+        Chrome 15.0	0.18%
+        Chrome 12.0	0.16%
+        Opera 12.x	0.15%
+        Safari 4.0	0.14%
+        Chrome 13.0	0.13%
+        Safari 4.1	0.12%
+        Chrome 11.0	0.10%
+        Firefox 14	0.10%
+        Firefox 2.0	0.09%
+        Chrome 10.0	0.09%
+        Opera 10.x	0.09%
+        Microsoft Internet Explorer 8.0 - Tencent Traveler Edition	0.09%
+</pre>
+  <script>
+    function showTable(data) {
+      var html = "";
+      for (var key in data) {
+        html += '<tr class="tr">';
+        html += '<td>' + data[key].name + '</td>';
+        html += '<td>' + data[key].per + '</td>';
+        html += '</tr>';
+      }
+      $('.tab').html(html);
+    }
+    function manageData(data) {
+      var manData = [];
+      data.forEach(function (item) {
+        var data = {};
+        data.name = item.name;
+        data.per = item.y.toFixed(2);
+        manData.push(data);
+      })
+      if (manData) {
+        showTable(manData)
+      }
+    }
+
+  </script>
+  <script>
+    Highcharts.data({
+      csv: document.getElementById('tsv').innerHTML,
+      itemDelimiter: '\t',
+      parsed: function (columns) {
+        var brands = {},
+          brandsData = [],
+          versions = {},
+          drilldownSeries = [];
+        // 解析百分比字符串
+        columns[1] = Highcharts.map(columns[1], function (value) {
+          if (value.indexOf('%') === value.length - 1) {
+            value = parseFloat(value);
+          }
+          return value;
+        });
+        $.each(columns[0], function (i, name) {
+          var brand,
+            version;
+          if (i > 0) {
+            // Remove special edition notes
+            name = name.split(' -')[0];
+            // 拆分
+            version = name.match(/([0-9]+[\.0-9x]*)/);
+            if (version) {
+              version = version[0];
+            }
+            brand = name.replace(version, '');
+            //创建主数据
+            if (!brands[brand]) {
+              brands[brand] = columns[1][i];
+            } else {
+              brands[brand] += columns[1][i];
+            }
+            // 创建版本数据
+            if (version !== null) {
+              if (!versions[brand]) {
+                versions[brand] = [];
+              }
+              versions[brand].push(['v' + version, columns[1][i]]);
+            }
+          }
+        });
+        $.each(brands, function (name, y) {
+          brandsData.push({
+            name: name,
+            y: y,
+            drilldown: versions[name] ? name : null
+          });
+        });
+        manageData(brandsData)
+        $.each(versions, function (key, value) {
+          drilldownSeries.push({
+            name: key,
+            id: key,
+            data: value
+          });
+        });
+        // 创建图例
+        var chart = Highcharts.chart('container', {
+          chart: {
+            type: 'pie',
+            events: {
+            drillup: function (event){
+              //上钻显示数据
+              manageData(event.seriesOptions.data)
+            }
+          },
+          },
+          title: {
+            text: '2013年11月浏览器市场份额'
+          },
+
+          subtitle: {
+            text: '单击每个浏览器品牌不同版本的具体信息，数据来源: netmarketshare.com.'
+          },
+          plotOptions: {
+            series: {
+              dataLabels: {
+                enabled: true,
+                format: '{point.name}: {point.y:.1f}%'
+              },
+              events: {
+                click: function (event) {
+                  //下钻显示数据
+                  for (var key in drilldownSeries) {
+                    if (drilldownSeries[key].name == event.point.name) {
+                      var html = "";
+                      drilldownSeries[key].data.forEach(function (item) {
+                          html += '<tr class="tr">';
+                          html += '<td>' + item[0] + '</td>';
+                          html += '<td>' + item[1] + '</td>';
+                          html += '</tr>';
+                      })
+                      $('.tab').html(html);
+                    }
+                  }
+                }
+              }
+            }
+          },
+          tooltip: {
+            headerFormat: '<span style="font-size:11px">{series.name}</span><br>',
+            pointFormat: '<span style="color:{point.color}">{point.name}</span>: <b>{point.y:.2f}%</b> of total<br/>'
+          },
+          series: [{
+            name: '品牌',
+            colorByPoint: true,
+            data: brandsData
+          }],
+          drilldown: {
+            series: drilldownSeries
+          }
+        });
+      }
+    });
+  </script>
+
+</body>
+
+</html>
